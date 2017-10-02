@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Hazardous Particle Map</title>
+        <meta name="viewport" content="initial-scale=1.0">
+        <meta charset="utf-8">
+        <style>
+            html, body {
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            #map {
+                height: 100%;
+                float: left; 
+                width: 50%;
+            }
+            
+            #info {
+                height: 100%;
+                background-color: black;
+                color: white;
+                float: right; 
+                width: 50%;
+            }
+            
+            #drone {
+                background-color: black;
+                color: white;
+            }
+            
+            h1 {
+                border-style: inset;
+                position: relative; 
+                text-align: center;
+            }
+            
+            h2 {
+                border-style: double;
+                position: relative; 
+                text-align: center;
+            }
+            
+            h3 {
+                
+            }
+            
+            td {
+                text-align: center;
+            }
+
+        </style>
+    </head>
+    <body>
+        <div id="map"></div>
+        <div id="info">
+            <h1>Drone Data</h1>
+              <div id="drone" style="padding: 20px">
+                <h2>Drone Air Quality Data</h2>
+                <table style="width: 100%">
+                    <tr>
+                        <th>Drone 1</th>
+                        <th>Drone 2</th>
+                        <th>Drone 3</th>
+                        <th>Drone 4</th>
+                    </tr>
+                    <tr>
+                        <td id="AIR1">Lat1</td>
+                        <td id="AIR2">Lat2</td>
+                        <td id="AIR3">Lat3</td>
+                        <td id="AIR4">Lat4</td>
+                    </tr>
+                </table>
+            </div>
+            <div id="drone" style="padding: 20px">
+                <h2>Drone Location Data</h2>
+                <table style="width: 100%">
+                    <tr>
+                        <th>Drone 1</th>
+                        <th>Drone 2</th>
+                        <th>Drone 3</th>
+                        <th>Drone 4</th>
+                    </tr>
+                    <tr>
+                        <td id="lat1">Lat1</td>
+                        <td id="lat2">Lat2</td>
+                        <td id="lat3">Lat3</td>
+                        <td id="lat4">Lat4</td>
+                    </tr>
+                    <tr>
+                        <td id="lon1">Lon1</td>
+                        <td id="lon2">Lon2</td>
+                        <td id="lon3">Lon3</td>
+                        <td id="lon4">Lon4</td>
+                    </tr>
+                </table>
+            </div>
+            
+            
+        </div>
+
+        
+        <script src="/socket.io/socket.io.js"></script>
+        <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyADf2Ss5DEZdZMFEJ0f8fmi1KcYRZMYLZI&callback=initMap" async defer></script>
+
+        <script>
+
+            var socket = io();
+            
+            function measure(lat1, lon1, lat2, lon2){  // generally used geo measurement function
+                var R = 6378.137; // Radius of earth in KM
+                var dLat = lat2 * Math.PI / 180 - lat1 * Math.PI / 180;
+                var dLon = lon2 * Math.PI / 180 - lon1 * Math.PI / 180;
+                var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+                var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                var d = R * c;
+                return d * 1000; // meters
+            }
+
+            function initMap() {
+
+                var alpha = 0.4;
+                var radius = 0;
+                var state = {lat: 0, lng: 0};
+                var state2 = {lat: 0, lng: 0};
+                var state3 = {lat: 0, lng: 0};
+                var state4 = {lat: 0, lng: 0};
+                var circleCenter = {lat: 0, lng: 0};
+
+                var map = new google.maps.Map(document.getElementById('map'), {
+                    center: state,
+                    zoom: 18
+                });
+                
+                var marker = new google.maps.Marker({
+                    position: state,
+                    map: map,
+                    title: 'Drone 1'
+                });
+                
+                var cityCircle = new google.maps.Circle({
+                  strokeColor: '#FF0000',
+                  strokeOpacity: 0.8,
+                  strokeWeight: 2,
+                  fillColor: '#FF0000',
+                  fillOpacity: 0.35,
+                  map: map,
+                  center: state2,
+                  radius: 2
+                });
+                
+                socket.on('airQuality', function(air) {
+                   marker.setTitle('Drone 1 air quality: ' + air);
+                   document.getElementById('AIR1').innerHTML = air;
+                   //bar.set(data[0], air);
+                });
+                
+                socket.on('position', function(pos) {
+                    
+                    if (pos.lat === null || pos.lon === null) {
+                        return;
+                    }
+
+                    if (state.lat === 0 && state.lng === 0) {
+                        state.lat = pos.lat;
+                        state.lng = pos.lon;
+                    } else {
+                        state.lat = (1 - alpha) * state.lat + alpha * pos.lat;
+                        state.lng = (1 - alpha) * state.lng + alpha * pos.lon;
+                    }
+                    
+                    
+                    //map.setCenter(state);
+                    
+                    marker.setPosition(state);
+                    
+                    circleCenter.lat = (state.lat + state2.lat + state3.lat + state4.lat)/4
+                    circleCenter.lng = (state.lng + state2.lng + state3.lng + state4.lng)/4
+                    
+                    radius = (measure(state2.lat, state2.lng, state3.lat, state3.lng) + measure(state.lat, state.lng, state4.lat, state4.lng))/4;
+                    map.setCenter(circleCenter);
+                    cityCircle.setCenter(circleCenter);
+                    cityCircle.setRadius(radius);
+                    document.getElementById('lat1').innerHTML = ' Lat: ' + state.lat;
+                    document.getElementById('lon1').innerHTML = ' Lon: ' + state.lng;
+                    //map.setZoom(radius/2);
+                });
+
+                var marker2 = new google.maps.Marker({
+                    position: state2,
+                    map: map,
+                    title: 'Drone 2 air quality: '
+                });
+
+                socket.on('airQuality2', function(air) {
+                   //airQuality2 = air; 
+                   marker2.setTitle('Drone 2 air quality: ' + air);
+                   document.getElementById('AIR2').innerHTML = air;
+                  // bar.set(data[1], air);
+                });
+                
+                socket.on('position2', function(pos) {
+                    
+                    if (pos.lat === null || pos.lon === null) {
+                        return;
+                    }
+
+                    if (state2.lat === 0 && state2.lng === 0) {
+                        state2.lat = pos.lat;
+                        state2.lng = pos.lon;
+                    } else {
+                        state2.lat = (1 - alpha) * state2.lat + alpha * pos.lat;
+                        state2.lng = (1 - alpha) * state2.lng + alpha * pos.lon;
+                    }
+                    marker2.setPosition(state2);
+                    
+                    circleCenter.lat = (state.lat + state2.lat + state3.lat + state4.lat)/4
+                    circleCenter.lng = (state.lng + state2.lng + state3.lng + state4.lng)/4
+                    
+                    radius = (measure(state2.lat, state2.lng, state3.lat, state3.lng) + measure(state.lat, state.lng, state4.lat, state4.lng))/4;
+                    map.setCenter(circleCenter);
+                    cityCircle.setCenter(circleCenter);
+                    cityCircle.setRadius(radius);
+                    document.getElementById('lat2').innerHTML = ' Lat: ' + state.lat;
+                    document.getElementById('lon2').innerHTML = ' Lon: ' + state.lng;
+                });
+                
+                var marker3 = new google.maps.Marker({
+                    position: state3,
+                    map: map,
+                    title: 'Drone 3'
+                });
+                
+                socket.on('airQuality3', function(air) {
+                   marker3.setTitle('Drone 3 air quality: ' + air);
+                   document.getElementById('AIR3').innerHTML = air;
+                  // bar.set(data[2], air);
+                });
+                
+                socket.on('position3', function(pos) {
+                    
+                    if (pos.lat === null || pos.lon === null) {
+                        return;
+                    }
+
+                    if (state3.lat === 0 && state3.lng === 0) {
+                        state3.lat = pos.lat;
+                        state3.lng = pos.lon;
+                    } else {
+                        state3.lat = (1 - alpha) * state3.lat + alpha * pos.lat;
+                        state3.lng = (1 - alpha) * state3.lng + alpha * pos.lon;
+                    }
+                    marker3.setPosition(state3);
+                    
+                    circleCenter.lat = (state.lat + state2.lat + state3.lat + state4.lat)/4
+                    circleCenter.lng = (state.lng + state2.lng + state3.lng + state4.lng)/4
+                    
+                    radius = (measure(state2.lat, state2.lng, state3.lat, state3.lng) + measure(state.lat, state.lng, state4.lat, state4.lng))/4;
+                    map.setCenter(circleCenter);
+                    cityCircle.setCenter(circleCenter);
+                    cityCircle.setRadius(radius);
+                    document.getElementById('lat3').innerHTML = ' Lat: ' + state.lat;
+                    document.getElementById('lon3').innerHTML = ' Lon: ' + state.lng;
+                });
+                
+                 var marker4 = new google.maps.Marker({
+                    position: state4,
+                    map: map,
+                    title: 'Drone 4'
+                });
+                
+                socket.on('airQuality4', function(air) {
+                   marker4.setTitle('Drone 4 air quality: ' + air);
+                   document.getElementById('AIR4').innerHTML = air;
+                   //bar.set(data[3], air);
+                });
+                
+                socket.on('position4', function(pos) {
+                    
+                    if (pos.lat === null || pos.lon === null) {
+                        return;
+                    }
+
+                    if (state4.lat === 0 && state4.lng === 0) {
+                        state4.lat = pos.lat;
+                        state4.lng = pos.lon;
+                    } else {
+                        state4.lat = (1 - alpha) * state4.lat + alpha * pos.lat;
+                        state4.lng = (1 - alpha) * state4.lng + alpha * pos.lon;
+                    }
+                    marker4.setPosition(state4);
+                    
+                    circleCenter.lat = (state.lat + state2.lat + state3.lat + state4.lat)/4
+                    circleCenter.lng = (state.lng + state2.lng + state3.lng + state4.lng)/4
+                    
+                    radius = (measure(state2.lat, state2.lng, state3.lat, state3.lng) + measure(state.lat, state.lng, state4.lat, state4.lng))/4;
+                    map.setCenter(circleCenter);
+                    cityCircle.setCenter(circleCenter);
+                    cityCircle.setRadius(radius);
+                    document.getElementById('lat4').innerHTML = ' Lat: ' + state.lat;
+                    document.getElementById('lon4').innerHTML = ' Lon: ' + state.lng;
+                });
+            }
+
+        </script>
+
+    </body>
+</html>
